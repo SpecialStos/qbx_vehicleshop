@@ -229,8 +229,7 @@ end)
 RegisterNetEvent('qbx_vehicleshop:server:buyShowroomVehicle', function(vehicle)
     local src = source
     local player = exports.qbx_core:GetPlayer(src)
-    vehicle = vehicle.buyVehicle
-    local vehiclePrice = coreVehicles[vehicle].price
+    local vehiclePrice = coreVehicles[vehicle.buyVehicle].price
     local currencyType = findChargeableCurrencyType(vehiclePrice, player.PlayerData.money.cash, player.PlayerData.money.bank)
     if not currencyType then
         exports.qbx_core:Notify(src, Lang:t('error.notenoughmoney'), 'error')
@@ -238,24 +237,41 @@ RegisterNetEvent('qbx_vehicleshop:server:buyShowroomVehicle', function(vehicle)
     end
 
     local cid = player.PlayerData.citizenid
-    local plate = generatePlate()
-    InsertVehicleEntity({
+
+    --The previous code responsible for adding it into the database.
+    --[[InsertVehicleEntity({
         license = player.PlayerData.license,
         citizenId = cid,
         model = vehicle,
         plate = plate,
-    })
+    })--]]
+
+    local data = {
+        source = src,
+        hash = GetHashKey(vehicle.buyVehicle),
+        coords = vehicle.location,
+        identifier = cid,
+        license = player.PlayerData.license,
+        vehicleName = vehicle.buyVehicle,
+        balance = 0,
+        vehPaymentsLeft = 0,
+        paymentAmount = tonumber(vehiclePrice),
+        financeTime = 0,
+    }
+    TriggerEvent("realisticVehicleSystem:server:addVehicle", data)
+
     exports.qbx_core:Notify(src, Lang:t('success.purchased'), 'success')
-    TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', src, vehicle, plate)
+    --TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', src, vehicle, plate)
     player.Functions.RemoveMoney(currencyType, vehiclePrice, 'vehicle-bought-in-showroom')
 end)
 
 -- Finance public vehicle
-RegisterNetEvent('qbx_vehicleshop:server:financeVehicle', function(downPayment, paymentAmount, vehicle)
+RegisterNetEvent('qbx_vehicleshop:server:financeVehicle', function(downPayment, paymentAmount, vehicle, location)
     local src = source
     local player = exports.qbx_core:GetPlayer(src)
     local vehiclePrice = coreVehicles[vehicle].price
     local minDown = tonumber(math.round((sharedConfig.finance.minimumDown / 100) * vehiclePrice)) --[[@as number]]
+
     downPayment = tonumber(downPayment) --[[@as number]]
     paymentAmount = tonumber(paymentAmount) --[[@as number]]
 
@@ -275,12 +291,13 @@ RegisterNetEvent('qbx_vehicleshop:server:financeVehicle', function(downPayment, 
         return exports.qbx_core:Notify(src, Lang:t('error.notenoughmoney'), 'error')
     end
 
-    local plate = generatePlate()
+
+    --local plate = generatePlate()
     local balance, vehPaymentAmount = calculateFinance(vehiclePrice, downPayment, paymentAmount)
     local cid = player.PlayerData.citizenid
     local timer = (config.finance.paymentInterval * 60)
 
-    InsertVehicleEntityWithFinance({
+    --[[InsertVehicleEntityWithFinance({
         insertVehicleEntityRequest = {
             license = player.PlayerData.license,
             citizenId = cid,
@@ -293,9 +310,24 @@ RegisterNetEvent('qbx_vehicleshop:server:financeVehicle', function(downPayment, 
             paymentsLeft = paymentAmount,
             timer = timer,
         }
-    })
+    })--]]
+
+    local data = {
+        source = src,
+        hash = GetHashKey(vehicle),
+        coords = location,
+        identifier = cid,
+        license = player.PlayerData.license,
+        vehicleName = vehicle,
+        balance = balance,
+        vehPaymentsLeft = paymentAmount,
+        paymentAmount = tonumber(vehPaymentAmount),
+        financeTime = timer,
+    }
+    TriggerEvent("realisticVehicleSystem:server:addVehicle", data)
+
     exports.qbx_core:Notify(src, Lang:t('success.purchased'), 'success')
-    TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', src, vehicle, plate)
+    --TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', src, vehicle, plate)
     player.Functions.RemoveMoney(currencyType, downPayment, 'vehicle-bought-in-showroom')
 end)
 
@@ -343,18 +375,32 @@ RegisterNetEvent('qbx_vehicleshop:server:sellShowroomVehicle', function(data, pl
 
     if not sellShowroomVehicleTransact(src, target, vehiclePrice, vehiclePrice) then return end
 
-    InsertVehicleEntity({
+    --[[InsertVehicleEntity({
         license = target.PlayerData.license,
         citizenId = cid,
         model = vehicle,
         plate = plate
-    })
+    })--]]
 
-    TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', target.PlayerData.source, vehicle, plate)
+    local data = {
+        source = src,
+        hash = GetHashKey(vehicle),
+        coords = vehicle.location,
+        identifier = cid,
+        license = target.PlayerData.license,
+        vehicleName = vehicle,
+        balance = 0,
+        vehPaymentsLeft = 0,
+        paymentAmount = tonumber(vehiclePrice),
+        financeTime = 0,
+    }
+    TriggerEvent("realisticVehicleSystem:server:addVehicle", data)
+
+    --TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', target.PlayerData.source, vehicle, plate)
 end)
 
 -- Finance vehicle to customer
-RegisterNetEvent('qbx_vehicleshop:server:sellfinanceVehicle', function(downPayment, paymentAmount, vehicle, playerid)
+RegisterNetEvent('qbx_vehicleshop:server:sellfinanceVehicle', function(downPayment, paymentAmount, vehicle, playerid, location)
     local src = source
     local target = exports.qbx_core:GetPlayer(tonumber(playerid))
 
@@ -388,7 +434,7 @@ RegisterNetEvent('qbx_vehicleshop:server:sellfinanceVehicle', function(downPayme
 
     if not sellShowroomVehicleTransact(src, target, vehiclePrice, downPayment) then return end
 
-    InsertVehicleEntityWithFinance({
+    --[[InsertVehicleEntityWithFinance({
         insertVehicleEntityRequest = {
             license = target.PlayerData.license,
             citizenId = cid,
@@ -401,9 +447,25 @@ RegisterNetEvent('qbx_vehicleshop:server:sellfinanceVehicle', function(downPayme
             paymentsLeft = paymentAmount,
             timer = timer,
         }
-    })
+    })--]]
 
-    TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', target.PlayerData.source, vehicle, plate)
+
+    local data = {
+        source = src,
+        hash = GetHashKey(vehicle),
+        coords = location,
+        identifier = cid,
+        license = target.PlayerData.license,
+        vehicleName = vehicle,
+        balance = balance,
+        vehPaymentsLeft = paymentAmount,
+        paymentAmount = tonumber(vehPaymentAmount),
+        financeTime = timer,
+    }
+    TriggerEvent("realisticVehicleSystem:server:addVehicle", data)
+
+
+    --TriggerClientEvent('qbx_vehicleshop:client:buyShowroomVehicle', target.PlayerData.source, vehicle, plate)
 end)
 
 -- Check if payment is due

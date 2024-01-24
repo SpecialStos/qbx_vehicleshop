@@ -188,7 +188,7 @@ local function openFinance(closestShowroomVehicle, buyVehicle)
 
     if not downPayment or not paymentAmount then return end
 
-    TriggerServerEvent('qbx_vehicleshop:server:financeVehicle', downPayment, paymentAmount, buyVehicle)
+    TriggerServerEvent('qbx_vehicleshop:server:financeVehicle', downPayment, paymentAmount, buyVehicle, config.shops[insideShop].vehicleSpawn)
 end
 
 --- Opens a menu with list of vehicles based on given category
@@ -290,7 +290,7 @@ local function openCustomFinance(closestVehicle)
 
     if not downPayment or not paymentAmount or not playerid then return end
 
-    TriggerServerEvent('qbx_vehicleshop:server:sellfinanceVehicle', downPayment, paymentAmount, vehicle, playerid)
+    TriggerServerEvent('qbx_vehicleshop:server:sellfinanceVehicle', downPayment, paymentAmount, vehicle, playerid, config.shops[insideShop].vehicleSpawn)
 end
 
 ---prompt client for playerId of another player
@@ -328,6 +328,7 @@ local function openVehicleSellMenu()
     local closestVehicle = getClosestShowroomVehicle()
     local options
     local vehicle = config.shops[insideShop].showroomVehicles[closestVehicle].vehicle
+    local location = config.shops[insideShop].vehicleSpawn
     local swapOption = {
         title = Lang:t('menus.swap_header'),
         description = Lang:t('menus.swap_txt'),
@@ -335,10 +336,8 @@ local function openVehicleSellMenu()
         arrow = true
     }
     if config.shops[insideShop].type == 'free-use' then
-        options = {}
-
-        if config.enableTestDrive then
-            options[#options + 1] = {
+        options = {
+            {
                 title = Lang:t('menus.test_header'),
                 description = Lang:t('menus.freeuse_test_txt'),
                 event = 'qbx_vehicleshop:client:testDrive',
@@ -346,15 +345,16 @@ local function openVehicleSellMenu()
                     vehicle = vehicle
                 }
             }
-        end
-
+        }
+        print(location)
         if config.enableFreeUseBuy then
             options[#options + 1] = {
                 title = Lang:t('menus.freeuse_buy_header'),
                 description = Lang:t('menus.freeuse_buy_txt'),
                 serverEvent = 'qbx_vehicleshop:server:buyShowroomVehicle',
                 args = {
-                    buyVehicle = vehicle
+                    buyVehicle = vehicle,
+                    location = location
                 }
             }
         end
@@ -373,6 +373,13 @@ local function openVehicleSellMenu()
     else
         options = {
             {
+                title = Lang:t('menus.test_header'),
+                description = Lang:t('menus.managed_test_txt'),
+                onSelect = function()
+                    startTestDrive(vehicle)
+                end,
+            },
+            {
                 title = Lang:t('menus.managed_sell_header'),
                 description = Lang:t('menus.managed_sell_txt'),
                 onSelect = function()
@@ -381,16 +388,6 @@ local function openVehicleSellMenu()
             }
         }
 
-        if config.enableTestDrive then
-            options[#options + 1] = {
-                title = Lang:t('menus.test_header'),
-                description = Lang:t('menus.managed_test_txt'),
-                onSelect = function()
-                    startTestDrive(vehicle)
-                end
-            }
-        end
-        
         if config.finance.enable then
             options[#options + 1] = {
                 title = Lang:t('menus.finance_header'),
@@ -498,7 +495,7 @@ end
 ---@param coords vector4
 ---@return number vehicleEntity
 local function createShowroomVehicle(model, coords)
-    lib.requestModel(model, requestModelTimeout)
+    lib.requestModel(model)
     local veh = CreateVehicle(model, coords.x, coords.y, coords.z, coords.w, false, false)
     SetModelAsNoLongerNeeded(model)
     SetVehicleOnGroundProperly(veh)
@@ -521,25 +518,23 @@ local function init()
     end)
 
     CreateThread(function()
-        if config.finance.enable then
-            lib.zones.box({
-                coords = config.finance.zone,
-                size = vec3(2, 2, 4),
-                rotation = 0,
-                debug = config.debugPoly,
-                onEnter = function()
-                    lib.showTextUI(Lang:t('menus.keypress_showFinanceMenu'))
-                end,
-                inside = function()
-                    if IsControlJustPressed(0, 38) then
-                        showFinancedVehiclesMenu()
-                    end
-                end,
-                onExit = function()
-                    lib.hideTextUI()
+        lib.zones.box({
+            coords = config.finance.zone,
+            size = vec3(2, 2, 4),
+            rotation = 0,
+            debug = config.debugPoly,
+            onEnter = function()
+                lib.showTextUI(Lang:t('menus.keypress_showFinanceMenu'))
+            end,
+            inside = function()
+                if IsControlJustPressed(0, 38) then
+                    showFinancedVehiclesMenu()
                 end
-            })
-        end
+            end,
+            onExit = function()
+                lib.hideTextUI()
+            end
+        })
     end)
 
     CreateThread(function()
@@ -587,6 +582,7 @@ RegisterNetEvent('qbx_vehicleshop:client:testDrive', function(args)
     inTestDrive = true
     local testDrive = config.shops[insideShop].testDrive
     local plate = 'TEST'..RandomNumber(4)
+    exports['realisticVehicleSystem']:giveVehicleKeysExtra(plate)
     local netId = lib.callback.await('qbx_vehicleshop:server:spawnVehicle', false, args.vehicle, testDrive.spawn, plate)
     testDriveVeh = netId
     exports.qbx_core:Notify(Lang:t('general.testdrive_timenoti'), testDrive.limit, 'inform')
